@@ -124,7 +124,7 @@ CERTEN is built on Accumulate, a blockchain purpose-built for identity and gover
 
 When governance requirements are satisfied, CERTEN generates a cryptographic proof through a nine-phase pipeline that establishes an unbroken chain of trust from the original transaction through governance evaluation to the destination chain. The pipeline verifies four things: (1) the transaction exists and is included in a confirmed block, (2) the block was signed by the BFT validator set with a chain of trust to genesis, (3) the correct governance authority authorized the transaction with a binding decision, and (4) 2/3+ of validators attested to the proof via BLS12-381 aggregate signatures, verified on-chain using a Groth16 ZK-SNARK.
 
-The final on-chain verification costs approximately 220,000 gas — regardless of governance complexity or validator count. For comparison, a standard ERC-20 transfer costs approximately 65,000 gas, and a 3-of-5 Gnosis Safe transaction costs approximately 250,000-400,000 gas. The full nine-phase breakdown is in Appendix C.
+The final on-chain verification costs approximately 220,000 gas — regardless of governance complexity or validator count. For comparison, a standard ERC-20 transfer costs approximately 65,000 gas, and a 3-of-5 Gnosis Safe transaction costs approximately 250,000-400,000 gas.
 
 ### 4.3 Batching and Anchoring
 
@@ -138,29 +138,19 @@ Proofs are anchored to destination chains via two mechanisms:
 
 On each destination chain, CERTEN deploys minimal smart contracts that hold assets but contain no governance logic. The contracts enforce a single rule: do not execute unless accompanied by a valid cryptographic proof from the governance layer. Each institution gets a deterministic account address (via CREATE2) that is the same on every EVM chain — one identity, one address, every network.
 
-The contracts support multi-leg intents: a single governance proof can authorize operations across multiple chains atomically (e.g., releasing collateral on Ethereum while adjusting a position on Arbitrum). ERC-4337 account abstraction provides compatibility with the standard bundler/paymaster ecosystem. Full contract specifications are in Appendix C.
+The contracts support multi-leg intents: a single governance proof can authorize operations across multiple chains atomically (e.g., releasing collateral on Ethereum while adjusting a position on Arbitrum). ERC-4337 account abstraction provides compatibility with the standard bundler/paymaster ecosystem.
 
-CERTEN's validator network runs real CometBFT (Tendermint) consensus with 7 validators on testnet. The network provides Byzantine fault tolerance (up to 1/3 Byzantine faults), multi-chain anchoring, BLS signature aggregation, and PostgreSQL-backed proof persistence. Validator infrastructure details are in Appendix C.
+CERTEN's validator network runs real CometBFT (Tendermint) consensus with 7 validators on testnet. The network provides Byzantine fault tolerance (up to 1/3 Byzantine faults), multi-chain anchoring, BLS signature aggregation, and PostgreSQL-backed proof persistence.
 
-### 4.5 Supported Networks (Current Testnet Status)
+### 4.5 Supported Networks
 
-| Network | Type | Status |
-|---------|------|--------|
-| Ethereum Sepolia | EVM L1 | Deployed |
-| Arbitrum Sepolia | EVM L2 | Deployed |
-| Optimism Sepolia | EVM L2 | Deployed |
-| Base Sepolia | EVM L2 | Deployed |
-| Polygon Amoy | EVM L1 | Deployed |
-| BSC Testnet | EVM L1 | Deployed |
-| Moonbase Alpha | EVM L1 | Deployed |
-| Solana Devnet | Non-EVM | Code complete |
-| Aptos Testnet | Move | Code complete |
-| Sui Testnet | Move | Code complete |
-| NEAR Testnet | NEAR | Code complete |
-| TON Testnet | TON | In development |
-| TRON Shasta | EVM-compatible | Code complete |
+CERTEN currently supports 13 blockchain networks on testnet:
 
-Each deployed EVM network runs the full contract suite (CertenAnchor, BLSZKVerifier, CertenAccountFactory) with production-quality Solidity and Foundry-based deployment scripts. Non-EVM contract source code is complete at varying maturity levels; testnet deployments are pending.
+**Deployed (7 EVM testnets):** Ethereum Sepolia, Arbitrum Sepolia, Optimism Sepolia, Base Sepolia, Polygon Amoy, BSC Testnet, Moonbase Alpha — each running the full contract suite (CertenAnchor, BLSZKVerifier, CertenAccountFactory) with production-quality Solidity and Foundry-based deployment scripts.
+
+**Code complete (5 non-EVM):** Solana, Aptos, Sui, NEAR, TRON — contract source code complete at varying maturity levels; testnet deployments pending.
+
+**In development (1):** TON — FunC/Tact contracts at specification stage.
 
 ---
 
@@ -283,7 +273,7 @@ Detailed token economics — including total supply, vesting schedule, and fee d
 | 9-phase proof pipeline | Implemented | L1-L4, G0-G2, BLS attestation, anchor submission |
 | BLS12-381 + Groth16 ZK-SNARK verifier | Deployed on 7 EVM testnets | `BLSZKVerifier.sol` with verification key management |
 | CometBFT validator network | Running (7 validators) | Real BFT consensus, not simulated |
-| ERC-4337 smart contract accounts | Deployed on 7 EVM testnets | `CertenAccountV3.sol` with deterministic CREATE2 deployment |
+| ERC-4337 smart contract accounts | Deployed on 7 EVM testnets | `CertenAccountV4.sol` with deterministic CREATE2 deployment |
 | Multi-leg intent system | Implemented | CertenAnchorV4 with atomic cross-chain operations |
 | Web application + REST API | Functional (50+ endpoints) | ADI management, multi-sig inbox, proof explorer, authority editor |
 | Non-EVM contracts | Varying stages | Solana (Anchor programs), CosmWasm, Move, NEAR, TON (specification) |
@@ -364,80 +354,7 @@ The team combines experience from Citi, Credit Suisse, and federal blockchain de
 
 ---
 
-## Appendix C: Technical Specifications
-
-### Nine-Phase Proof Pipeline
-
-| Phase | Category | What It Proves |
-|-------|----------|---------------|
-| **L1** | Lite Client | The transaction exists in the specified Accumulate account |
-| **L2** | Lite Client | The account state is included in a confirmed Accumulate block |
-| **L3** | Lite Client | The block was signed by the BFT validator set (CometBFT consensus) |
-| **L4** | Lite Client | The validator set traces back to genesis (chain of trust) |
-| **G0** | Governance | The transaction was included in the governance evaluation process |
-| **G1** | Governance | The correct authority (key page) authorized the transaction |
-| **G2** | Governance | The governance decision is binding and final |
-| **BLS** | Attestation | 2/3+ of validators attested to the proof via BLS12-381 aggregate signatures, verified on-chain using a Groth16 ZK-SNARK |
-| **Anchor** | Cross-Chain | The batch Merkle root containing this proof was committed to the destination chain's anchor contract |
-
-The BLS attestation phase is technically significant: individual validator signatures are aggregated into a single BLS12-381 signature, and a Groth16 zero-knowledge proof is generated to attest that the aggregate signature is valid, the signing validators match claimed public keys, and the 2/3+ voting power threshold was met. This proof is verified on-chain using EVM precompiles (ecMul, ecAdd, ecPair) at approximately 220,000 gas — regardless of how many validators participated.
-
-### Execution Contract Specifications
-
-**CertenAnchor (V3/V4)** — Receives and stores state anchors (Merkle roots) from CERTEN validators. Verifies comprehensive proofs with six verification layers: Merkle inclusion, BLS signature (via ZK-SNARK), governance authority, commitment binding, timestamp validity, and nonce uniqueness (anti-replay). V4 adds multi-leg intent verification for atomic cross-chain operations. Each leg specifies its destination chain and operation; the proof covers the entire intent atomically.
-
-**BLSZKVerifier** — A Groth16 verifier contract that validates zero-knowledge proofs of BLS12-381 aggregate signatures. Includes verification key management for circuit updates and a proof cache for gas efficiency.
-
-**CertenAccountV3** — An ERC-4337-compatible smart contract account linked to a specific ADI. Implements the standard account abstraction interface (`BaseAccount`) for compatibility with bundlers and paymasters. Enforces that all operations are accompanied by a valid ADI governance proof. Supports role-based authority levels (Operator, Manager, Admin, Root) with value-based thresholds. Each ADI maps to a deterministic address across all EVM chains via CREATE2.
-
-**CertenAccountFactory** — Deploys CertenAccount instances deterministically via CREATE2, mapping each ADI to a unique account address.
-
-### Validator Infrastructure
-
-CERTEN's validator network runs real CometBFT (Tendermint) consensus — not simulated or mocked. The current testnet operates with 7 validators. Key characteristics:
-
-- **Byzantine fault tolerance:** Requires 2/3+ honest validators (tolerates up to 1/3 Byzantine faults)
-- **Multi-chain anchoring:** Each validator monitors Accumulate for transaction intents, generates proofs, participates in BFT consensus, and submits batch anchors to configured destination chains
-- **Attestation service:** Validators broadcast attestation requests to peers, collect BLS signatures, and aggregate them for on-chain verification
-- **Proof storage:** PostgreSQL-backed persistence with 5 database migration schemas covering batches, transactions, anchors, attestations, and proof artifacts
-- **Monitoring:** Prometheus metrics for consensus height, proofs generated, batch sizes, gas usage, and attestation counts
-
-### Sentinel Signer (Specification — Not Yet Implemented)
-
-The Sentinel Signer is a planned programmable guardian node that will enforce institutional compliance rules (KYC/AML, transaction limits) at the transaction level. It will require HSM-backed key management and is targeted for post-mainnet release.
-
-### Proof Bundle Format
-
-CERTEN proofs are distributed as self-contained bundles conforming to the CertenProofBundle v1.0 schema (derived from the working implementation in `proofs_service`):
-
-```
-{
-  "bundle_version": "1.0",
-  "transaction_reference": {
-    "accum_tx_hash": "...",
-    "account_url": "acc://...",
-    "transaction_type": "..."
-  },
-  "proof_components": {
-    "1_merkle_inclusion": { merkle_root, leaf_hash, merkle_path },
-    "2_anchor_reference": { chain, tx_hash, block_number, confirmations },
-    "3_chained_proof": { accumulate_state_proof, block_height, bvn },
-    "4_governance_proof": { level (G0/G1/G2), proof_data, valid }
-  },
-  "validator_attestations": [ { validator_id, bls_signature, weight } ],
-  "bundle_integrity": { hash, signature }
-}
-```
-
-### Smart Contract Security Model
-
-- **CertenAnchorV3/V4:** OpenZeppelin Pausable, owner/operator/validator access tiers, commitment anti-replay, nonce tracking, fail-closed governance verification. V4 adds multi-leg intent verification for atomic cross-chain operations.
-- **BLSZKVerifier:** Verification key initialization checks, proof caching, owner-only key updates
-- **CertenAccountV3:** ReentrancyGuard, proof hash anti-replay, governance nonce tracking, ERC-4337 standard compliance
-
----
-
-## Appendix D: Legal Architecture Assumptions
+## Appendix C: Legal Architecture Assumptions
 
 ### UCC Section 12-105 — System Requirement
 
